@@ -40,14 +40,19 @@ class FrameAccount(AccountAPI):
 
         if isinstance(msg, str):
             # encode string messages as Ethereum Signed Messages
-            raw_signature = self.web3.eth.sign(self.address, text=msg)
+            try:
+                raw_signature = self.web3.eth.sign(self.address, text=msg)
+            except ValueError as e:
+                if not e.args[0]["message"] == "User declined transaction":
+                    raise
+                return None
+
         if isinstance(msg, SignableMessage):
             try:
                 raw_signature = self.web3.eth.sign(self.address, data=msg.body)
             except ValueError as e:
                 if not e.args[0]["message"] == "User declined transaction":
                     raise
-
                 return None
 
         if isinstance(msg, EIP712Message):
@@ -56,7 +61,6 @@ class FrameAccount(AccountAPI):
             except ValueError as e:
                 if not e.args[0]["message"] == "User declined transaction":
                     raise
-
                 return None
 
         return (
