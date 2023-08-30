@@ -1,10 +1,12 @@
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Any, Union
 
 from ape.api.accounts import AccountAPI, AccountContainerAPI, TransactionAPI
 from ape.types import AddressType, MessageSignature, SignableMessage, TransactionSignature
 from eth_account._utils.legacy_transactions import serializable_unsigned_transaction_from_dict
 from eth_account.messages import _hash_eip191_message
 from eth_utils.curried import keccak
+from eth_account.messages import encode_defunct
+from eip712.messages import EIP712Message
 from web3 import HTTPProvider, Web3
 
 
@@ -34,19 +36,38 @@ class FrameAccount(AccountAPI):
     def address(self) -> AddressType:
         return self.web3.eth.accounts[0]
 
-    def sign_message(self, msg: SignableMessage) -> Optional[MessageSignature]:
-        try:
-            raw_signature = self.web3.eth.sign(self.address, hexstr=_hash_eip191_message(msg).hex())
-        except ValueError as e:
-            if not e.args[0]["message"] == "User declined transaction":
-                raise
+    def sign_message(self, msg: Any) -> Optional[MessageSignature]:
+        raw_signature = None
 
-            return None
+        if isinstance(msg, str):
+            # encode string messages as Ethereum Signed Messages
+            raw_signature = self.web3.eth.sign(self.address, text=msg)
+        if isinstance(msg, SignableMessage):
+            try:
+                raw_signature = self.web3.eth.sign(self.address, data=msg.body)
+            except ValueError as e:
+                if not e.args[0]["message"] == "User declined transaction":
+                    raise
 
-        return MessageSignature(  # type: ignore[call-arg]
-            v=raw_signature[64],
-            r=raw_signature[0:32],
-            s=raw_signature[32:64],
+                return None
+
+        if isinstance(msg, EIP712Message):
+            try:
+                raw_signature = self.web3.eth.sign_typed_data(self.address, msg._body_)
+            except ValueError as e:
+                if not e.args[0]["message"] == "User declined transaction":
+                    raise
+
+                return None
+
+        return (
+            MessageSignature(  # type: ignore[call-arg]
+                v=raw_signature[64],
+                r=raw_signature[0:32],
+                s=raw_signature[32:64],
+            )
+            if raw_signature
+            else None
         )
 
     def sign_transaction(self, txn: TransactionAPI, **signer_options) -> Optional[TransactionAPI]:
@@ -68,3 +89,14 @@ class FrameAccount(AccountAPI):
             s=raw_signature[32:64],
         )
         return txn
+
+    def check_signature(
+        self,
+        data: Union[SignableMessage, TransactionAPI, EIP712Message, str],
+        signature: Optional[MessageSignature] = None,
+    ) -> bool:
+        if isinstance(data, str):
+            data = encode_defunct(text=data)
+        if isinstance(data, EIP712Message):
+            data = data.signable_message
+        return super().check_signature(data, signature)
