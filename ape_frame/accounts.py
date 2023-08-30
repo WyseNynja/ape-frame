@@ -1,12 +1,11 @@
-from typing import Iterator, Optional, Any, Union
+from typing import Any, Iterator, Optional, Union
 
 from ape.api.accounts import AccountAPI, AccountContainerAPI, TransactionAPI
 from ape.types import AddressType, MessageSignature, SignableMessage, TransactionSignature
-from eth_account._utils.legacy_transactions import serializable_unsigned_transaction_from_dict
-from eth_account.messages import _hash_eip191_message
-from eth_utils.curried import keccak
-from eth_account.messages import encode_defunct
 from eip712.messages import EIP712Message
+from eth_account._utils.legacy_transactions import serializable_unsigned_transaction_from_dict
+from eth_account.messages import encode_defunct
+from eth_utils.curried import keccak
 from web3 import HTTPProvider, Web3
 
 
